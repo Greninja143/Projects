@@ -2,15 +2,16 @@
 
 This script extracts the following artifacts:
 
-| Artifact             | Description                                |
-| -------------------- | ------------------------------------------ |
-| System Information   | Hostname, OS, kernel, uptime               |
-| Users & Groups       | `/etc/passwd`, `/etc/group`, login history |
-| Processes & Crontabs | Running processes, crontab entries         |
-| Network Activity     | Interfaces, IPs, connections               |
-| Installed Packages   | Installed software list                    |
-| Bash History         | All users' `.bash_history`                 |
-| SSH Keys             | All users' SSH keys                        |
-| System Logs          | `/var/log`                                 |
-| Mounted Drives       | Drives and mount points                    |
+| Section                | Description                                        |
+| ---------------------- | -------------------------------------------------- |
+| **System Info**        | OS version, kernel, uptime, mounted file systems   |
+| **Accounts**           | Users, groups, shadow file, login history          |
+| **Processes/Services** | Running tasks and background services              |
+| **Scheduled Tasks**    | User crontabs                                      |
+| **Network**            | Interfaces, routing table, connections, open ports |
+| **Installed Packages** | `dpkg -l` or `rpm -qa` depending on distro         |
+| **Histories**          | `.bash_history` and `.ssh/` per user               |
+| **Logs**               | Copies all log files from `/var/log`               |
+| **SUID/SGID Files**    | Potential privilege escalation binaries            |
+| **Recent Files**       | Changes in the last 5 days (you can adjust)        |
 
