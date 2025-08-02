@@ -1,4 +1,5 @@
 🔍 What This Script Does
+
 This script extracts the following artifacts:
 
 | Artifact             | Description                                |
