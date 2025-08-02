@@ -1,0 +1,142 @@
+import os
+import subprocess
+import shutil
+import socket
+import platform
+import getpass
+from datetime import datetime
+
+output_dir = f"Forensic_Artifacts_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+os.makedirs(output_dir, exist_ok=True)
+
+def save_output(filename, data):
+    with open(os.path.join(output_dir, filename), 'w', encoding='utf-8') as f:
+        f.write(data)
+
+def run_cmd(cmd):
+    try:
+        return subprocess.check_output(cmd, shell=True, text=True, stderr=subprocess.DEVNULL)
+    except subprocess.CalledProcessError:
+        return f"[!] Failed: {cmd}"
+
+def collect_system_info():
+    info = f"Hostname: {socket.gethostname()}\n"
+    info += f"User: {getpass.getuser()}\n"
+    info += f"OS: {platform.platform()}\n"
+    info += run_cmd("systeminfo")
+    save_output("system_info.txt", info)
+
+def collect_users():
+    data = run_cmd("net user")
+    data += "\n" + run_cmd("whoami /all")
+    data += "\n" + run_cmd("wmic useraccount get name,sid")
+    save_output("users.txt", data)
+
+def save_registry_hive(hive_name, save_path):
+    try:
+        result = subprocess.run(
+            ["reg", "save", hive_name, save_path, "/y"],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode == 0:
+            print(f"[+] Saved {hive_name} to {save_path}")
+        else:
+            print(f"[-] Failed to save {hive_name}: {result.stderr}")
+    except Exception as e:
+        print(f"[!] Exception saving {hive_name}: {e}")
+
+def extract_all_hives(output_dir):
+    hive_paths = {
+        "HKLM\\SAM": os.path.join(output_dir, "SAM.hive"),
+        "HKLM\\SECURITY": os.path.join(output_dir, "SECURITY.hive"),
+        "HKLM\\SYSTEM": os.path.join(output_dir, "SYSTEM.hive"),
+        "HKLM\\SOFTWARE": os.path.join(output_dir, "SOFTWARE.hive")
+    }
+
+    for hive, path in hive_paths.items():
+        save_registry_hive(hive, path)
+
+def collect_startup_items():
+    data = run_cmd('reg query "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"')
+    data += "\n" + run_cmd('reg query "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"')
+    save_output("startup_items.txt", data)
+
+def collect_services():
+    data = run_cmd("sc query type= service state= all")
+    save_output("services.txt", data)
+
+def collect_drivers():
+    data = run_cmd("driverquery /v")
+    save_output("drivers.txt", data)
+
+def collect_processes():
+    data = run_cmd("wmic process get ProcessId,ExecutablePath,CommandLine /format:list")
+    save_output("processes.txt", data)
+
+def collect_network_info():
+    data = run_cmd("ipconfig /all")
+    data += "\n" + run_cmd("netstat -ano")
+    data += "\n" + run_cmd("arp -a")
+    data += "\n" + run_cmd("ipconfig /displaydns")
+    save_output("network_info.txt", data)
+
+def collect_event_logs():
+    for log in ["System", "Application", "Security"]:
+        evtx_path = os.path.join(output_dir, f"{log}.evtx")
+        run_cmd(f"wevtutil epl {log} \"{evtx_path}\"")
+
+def collect_installed_programs():
+    data = run_cmd('wmic product get name,version')
+    save_output("installed_programs.txt", data)
+
+def collect_browser_history():
+    user_dir = os.environ.get("USERPROFILE", "")
+    chrome = os.path.join(user_dir, "AppData\\Local\\Google\\Chrome\\User Data\\Default\\History")
+    firefox = os.path.join(user_dir, "AppData\\Roaming\\Mozilla\\Firefox\\Profiles")
+    if os.path.exists(chrome):
+        shutil.copy(chrome, os.path.join(output_dir, "Chrome_History"))
+    if os.path.exists(firefox):
+        for root, dirs, files in os.walk(firefox):
+            for file in files:
+                if "places.sqlite" in file:
+                    shutil.copy(os.path.join(root, file), os.path.join(output_dir, "Firefox_History.sqlite"))
+
+def collect_misc_artifacts():
+    misc_dir = os.path.join(output_dir, "misc")
+    os.makedirs(misc_dir, exist_ok=True)
+
+    # Prefetch
+    pf_dir = r"C:\Windows\Prefetch"
+    if os.path.exists(pf_dir):
+        shutil.copytree(pf_dir, os.path.join(misc_dir, "Prefetch"), dirs_exist_ok=True)
+
+    # Recent files
+    try:
+        recent = os.path.join(os.environ.get("USERPROFILE", ""), "Recent")
+        if os.path.exists(recent):
+            shutil.copytree(recent, os.path.join(misc_dir, "Recent"), dirs_exist_ok=True)
+    except PermissionError as e:
+        print(f"[!] Permission denied accessing Recent folder: {e}")
+    except Exception as e:
+        print(f"[!] Error copying Recent files: {e}")
+
+
+def main():
+    print("[*] Collecting forensic artifacts from live system...")
+    collect_system_info()
+    collect_users()
+    extract_all_hives(output_dir)
+    collect_startup_items()
+    collect_services()
+    collect_drivers()
+    collect_processes()
+    collect_network_info()
+    collect_event_logs()
+    collect_installed_programs()
+    collect_browser_history()
+    collect_misc_artifacts()
+    print(f"[+] Done. Artifacts saved to: {os.path.abspath(output_dir)}")
+
+if __name__ == "__main__":
+    main()
